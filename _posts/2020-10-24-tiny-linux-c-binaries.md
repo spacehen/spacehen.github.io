@@ -62,7 +62,7 @@ GNU-binutils `objdump` allows us to inspect the full list of ELF sections with t
 
 After running `objdump -h example` on our sample binary we see that there are a large number of GCC derived sections: `.gnu.version` and `.note.gnu.property` attached to the binary image. The question becomes how much data these additional sections are consuming and to what degree can we 'strip' out redundant data.
 
-![enter image description here](https://journal.lunar.sh/images/2/01.png)
+![enter image description here](https://spacehen.github.io/images/2/01.png)
 
 GNU-binutils comes with a handy utility called `strip`, which attempts to remove unused ELF sections from a binary. Running `strip -s example` results only in a slightly reduced file of around **~14.5 KB**. Clearly, we need to strip much more! :-o
 
@@ -205,7 +205,7 @@ syscall:
    
 Finally gcc was invoked with `gcc base.c boot.s -nostdlib -o base` 
 
-![enter image description here](https://journal.lunar.sh/images/2/05.png)
+![enter image description here](https://spacehen.github.io/images/2/05.png)
 
 Wait what!? We still get a ~14kb executable after all that work? 
 Yep, and although we have optimised the main object code for our example, we have not yet stripped out redundant ELF code sections which contribute a majority of the file size.
@@ -275,7 +275,7 @@ Running `./sstrip base` we get our final executable binary with a size of **~830
 
 At this point it would probably be best to switch to assembly to get smaller file sizes, however the goal of this journal was to create small executables written in C and I think we've done quite well to reduce in size from  ~17kb down to ~830 bytes!
 
-![enter image description here](https://journal.lunar.sh/images/2/08.png)
+![enter image description here](https://spacehen.github.io/images/2/08.png)
 
 As a final comment you might be wondering if we could have simply run `sstrip` from our 17kb executable in the first place and the answer would be, no.
 
