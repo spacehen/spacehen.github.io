@@ -1,3 +1,3 @@
 # Journal
 
-Home of my personal journal: [spacehen.github.io](spacehen.github.io)
+Home of my personal journal: [http://spacehen.github.io](http://spacehen.github.io)
