@@ -16,7 +16,7 @@ Learning mono library injection through a Robocraft exploit.
 
 The mono build chain compiles C# source code (.cs files) down to IL (immediate language) spec'd byte code which is then executed by the CLR (Common Language Runtime) layer provided by mono.
 
-![enter image description here](https://journal.lunar.sh/images/4/04.png)
+![enter image description here](https://spacehen.github.io/images/4/04.png)
 
 Due to the translation down to IL, module decompilation as well as modification/reverse engineering is relatively straightforward and a variety of C# IL decompilers/recompilers already exist ([dnSpy](https://github.com/dnSpy/dnSpy/), [ILSpy](https://github.com/icsharpcode/ILSpy)). 
 
@@ -27,7 +27,7 @@ The focus of this journal is on managed library injection, more specifically the
 
 [Robocraft](https://en.wikipedia.org/wiki/Robocraft) is an online MMO game developed by freejam games. It features futuristic robotic battles and is an example of an application we wish to tamper with.
 
-![enter image description here](https://journal.lunar.sh/images/4/01.jpg)
+![enter image description here](https://spacehen.github.io/images/4/01.jpg)
 
 Robocraft uses the [Unity3D](https://unity3d.com/get-unity/download) engine, which is a high level c# component based game engine.
 
@@ -42,11 +42,11 @@ Browsing the Robocraft root directory (installed via steam) revealed a few direc
  - lib32 
  - EasyAntiCheat.
 
-![enter image description here](https://journal.lunar.sh/images/4/02.png)
+![enter image description here](https://spacehen.github.io/images/4/02.png)
 
 Upon further inspection of the Robocraft_Data directory, we find the folders containing the managed (C#/Mono) portion of the application. In particular, the Managed folder contains the C# libraries in DLL form of the Unity Engine as well as other proprietary modules from the game developer.
 
-![enter image description here](https://journal.lunar.sh/images/4/03.png)
+![enter image description here](https://spacehen.github.io/images/4/03.png)
 
 However at his point it's worth noting the presence of the EasyAntiCheat folder in the root game directory which confirms the presence of an anti-cheat client. 
 
@@ -246,4 +246,4 @@ In order to find the names of the game objects for the main player as well as ne
 <a name="source"/>
 ### Source Code
 
-All source code for this journal is hosted at [https://git.lunar.sh/spacehen/RobocraftClient/](https://git.lunar.sh/spacehen/RobocraftClient/)
+All source code for this journal is hosted at [https://github.com/spacehen/robocraft](https://github.com/spacehen/robocraft)
