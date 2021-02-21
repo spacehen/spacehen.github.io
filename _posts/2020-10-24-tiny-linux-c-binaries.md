@@ -284,4 +284,4 @@ I tried doing this and ended up with a binary image of around ~12 KB so it seems
 <a name="source"/>
 ### Source Code
 
-Source code used in this journal is available at: [https://git.lunar.sh/space_hen/tinybasee](https://git.lunar.sh/space_hen/tinybase)
+Source code used in this journal is available at: [https://github.com/spacehen/tinybase](https://github.com/spacehen/tinybase)
