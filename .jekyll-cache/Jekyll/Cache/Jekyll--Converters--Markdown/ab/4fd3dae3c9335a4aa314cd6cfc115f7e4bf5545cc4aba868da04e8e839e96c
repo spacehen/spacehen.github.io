@@ -1,0 +1,253 @@
+I"L8<p>Learning about mono library injection through a Robocraft exploit.</p>
+
+<ol>
+  <li><a href="#mono">Mono Overview</a></li>
+  <li><a href="#robocraft">Exploiting Robocraft</a></li>
+  <li><a href="#source">Source Code</a></li>
+</ol>
+
+<p><a name="mono"></a></p>
+<h3 id="mono-overview">Mono Overview</h3>
+
+<p><a href="https://en.wikipedia.org/wiki/Mono_%28software%29">Mono</a> is an open source port of the .NET framework which runs on a variety of  operating systems (including Linux).</p>
+
+<p>The mono build chain compiles C# source code (.cs files) down to IL (immediate language) spec’d byte code which is then executed by the CLR (Common Language Runtime) layer provided by mono.</p>
+
+<p><img src="https://journal.lunar.sh/images/4/04.png" alt="enter image description here" /></p>
+
+<p>Due to the translation down to IL, module decompilation as well as modification/reverse engineering is relatively straightforward and a variety of C# IL decompilers/recompilers already exist (<a href="https://github.com/dnSpy/dnSpy/">dnSpy</a>, <a href="https://github.com/icsharpcode/ILSpy">ILSpy</a>).</p>
+
+<p>The focus of this journal is on managed library injection, more specifically the ability to inject c# code of our own and interact with/modify a target host.</p>
+
+<p><a name="robocraft"></a></p>
+<h3 id="exploiting-robocraft">Exploiting Robocraft</h3>
+
+<p><a href="https://en.wikipedia.org/wiki/Robocraft">Robocraft</a> is an online MMO game developed by freejam games. It features futuristic robotic battles and is an example of an application we wish to tamper with.</p>
+
+<p><img src="https://robocraftgame.com/images/devblog/robopassnowlive.jpg" alt="enter image description here" /></p>
+
+<p>Robocraft uses the <a href="https://unity3d.com/get-unity/download">Unity3D</a> engine, which is a high level c# component based game engine.</p>
+
+<p>World entities in Unity3D derive from class <code class="language-plaintext highlighter-rouge">UnityEngine::GameObject</code> and may have a number of components attached to them such as: rigidbodies, mesh renderers, scripts, etc.</p>
+
+<p><code class="language-plaintext highlighter-rouge">UnityEngine::GameObject</code> has many useful <a href="https://docs.unity3d.com/ScriptReference/GameObject.html">properties</a> such as a name (string), tag, transform (position), etc. as well as static methods for finding objects by name, tag, etc. These methods become useful when injecting our own code as they provide a facility for interfacing with the game engine from an external context (our c# script).</p>
+
+<p>Browsing the Robocraft root directory (installed via steam) revealed a few directories that seemed interesting:</p>
+
+<ul>
+  <li>Robocraft_Data</li>
+  <li>lib64</li>
+  <li>lib32</li>
+  <li>EasyAntiCheat.</li>
+</ul>
+
+<p><img src="https://journal.lunar.sh/images/4/02.png" alt="enter image description here" /></p>
+
+<p>Upon further inspection of the Robocraft_Data directory, we find the folders containing the managed (C#/Mono) portion of the application. In particular, the Managed folder contains the C# libraries in DLL form of the Unity Engine as well as other proprietary modules from the game developer.</p>
+
+<p><img src="https://journal.lunar.sh/images/4/03.png" alt="enter image description here" /></p>
+
+<p>However at his point it’s worth noting the presence of the EasyAntiCheat folder in the root game directory which confirms the presence of an anti-cheat client.</p>
+
+<p>After some research I found out a few interesting details about the game’s anti-cheat client EasyAntiCheat:</p>
+
+<ul>
+  <li>The client computes hashes of all binary images during startup (including managed libraries) and is cross-referenced to prevent modification to game binaries.</li>
+  <li>Uses a heartbeat mechanism to ensure presence of the anti-cheat client (To mitigate anti-cheat removal)</li>
+  <li>Works with an online service known as RoboShield to monitor server side parameters such as position, velocity, damage, etc and assigns each user with a trust score. The lower the score the higher the chance of getting kicked from subsequent matches. This score seems to be persistent.</li>
+</ul>
+
+<p>Nonetheless, nothing seemed to prevent us from injecting our own c# library at runtime and this was the vector employed with Robocraft. The advantage of this method was that no modification to the game binaries would be required and therefore any client side anti-tamper protection could be bypassed.</p>
+
+<p>In order to inject our own c# code we need to somehow force the client to load our own  .NET/mono library at runtime. This may be accomplished by a stager payload which is essentially a shared library that makes internal calls to <code class="language-plaintext highlighter-rouge">libmono.so</code></p>
+
+<p>Some interesting symbols found in <code class="language-plaintext highlighter-rouge">libmono.so</code> include:</p>
+
+<ul>
+  <li><strong>mono_get_root_domain</strong> - get handle to primary domain</li>
+  <li><strong>mono_thread_attach</strong> - attach to domain</li>
+  <li><strong>mono_assembly_open</strong> - load assembly</li>
+  <li><strong>mono_assembly_get_image</strong> - get assembly image</li>
+  <li><strong>mono_class_from_name</strong> - get handle to class</li>
+  <li><strong>mono_class_get_method_from_name</strong> - get handle to class method</li>
+  <li><strong>mono_runtime_invoke</strong> - invoke class method</li>
+</ul>
+
+<p>The function signatures for these symbols are shown below:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>typedef void* (*mono_thread_attach)(void* domain);
+typedef void* (*mono_get_root_domain)();
+typedef void* (*mono_assembly_open)(char* file, void* stat);
+typedef void* (*mono_assembly_get_image)(void* assembly);
+typedef void* (*mono_class_from_name)(void* image, char* namespacee, char* name);
+typedef void* (*mono_class_get_method_from_name)(void* classs, char* name, DWORD param_count);
+typedef void* (*mono_runtime_invoke)(void* method, void* instance, void* *params, void* exc);
+</code></pre></div></div>
+
+<p>In order to perform code injection, firstly a handle to the root application domain must be retrieved using <code class="language-plaintext highlighter-rouge">mono_get_root_domain</code>. The primary application thread must then be binded to the root domain using <code class="language-plaintext highlighter-rouge">mono_thread_attach</code> and the assembly image loaded with <code class="language-plaintext highlighter-rouge">mono_assembly_open</code> and <code class="language-plaintext highlighter-rouge">mono_assembly_get_image</code></p>
+
+<p>Next the assembly class and class method to execute may be found by name using <code class="language-plaintext highlighter-rouge">mono_class_from_name</code> and <code class="language-plaintext highlighter-rouge">mono_class_get_method_from_name</code></p>
+
+<p>Finally the class method may be executed using <code class="language-plaintext highlighter-rouge">mono_runtime_invoke</code>. It should be noted that the class method to execute should be declared as static.</p>
+
+<p>The resulting starger payload is shown below:</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>#include &lt;iostream&gt;
+#include &lt;link.h&gt;
+#include &lt;fstream&gt;
+
+using namespace std;
+
+typedef unsigned long DWORD;
+
+typedef void* (*mono_thread_attach)(void* domain);
+typedef void* (*mono_get_root_domain)();
+typedef void* (*mono_assembly_open)(char* file, void* stat);
+typedef void* (*mono_assembly_get_image)(void* assembly);
+typedef void* (*mono_class_from_name)(void* image, char* namespacee, char* name);
+typedef void* (*mono_class_get_method_from_name)(void* classs, char* name, DWORD param_count);
+typedef void* (*mono_runtime_invoke)(void* method, void* instance, void* *params, void* exc);
+
+
+mono_get_root_domain do_mono_get_root_domain;
+mono_assembly_open do_mono_assembly_open;
+mono_assembly_get_image do_mono_assembly_get_image;
+mono_class_from_name do_mono_class_from_name;
+mono_class_get_method_from_name do_mono_class_get_method_from_name;
+mono_runtime_invoke do_mono_runtime_invoke;
+mono_thread_attach do_mono_thread_attach;
+
+int __attribute__((constructor)) init()
+{
+        void* library = dlopen("./Robocraft_Data/Mono/x86_64/libmono.so",  RTLD_NOLOAD | RTLD_NOW);
+     
+        do_mono_thread_attach = (mono_thread_attach)(dlsym(library, "mono_thread_attach"));
+        do_mono_get_root_domain = (mono_get_root_domain)(dlsym(library, "mono_get_root_domain"));
+        do_mono_assembly_open = (mono_assembly_open)(dlsym(library, "mono_assembly_open"));
+        do_mono_assembly_get_image = (mono_assembly_get_image)(dlsym(library, "mono_assembly_get_image"));
+        do_mono_class_from_name = (mono_class_from_name)(dlsym(library, "mono_class_from_name"));
+        do_mono_class_get_method_from_name = (mono_class_get_method_from_name)(dlsym(library, "mono_class_get_method_from_name"));
+        do_mono_runtime_invoke = (mono_runtime_invoke)(dlsym(library, "mono_runtime_invoke"));
+
+   
+        do_mono_thread_attach(do_mono_get_root_domain());
+        void* assembly = do_mono_assembly_open("./Robocraft_Data/Managed/Client.dll", NULL);
+        
+        void* Image = do_mono_assembly_get_image(assembly);
+        void* MonoClass = do_mono_class_from_name(Image, "Test", "Test");
+        void* MonoClassMethod = do_mono_class_get_method_from_name(MonoClass, "Load", 0);
+    
+        do_mono_runtime_invoke(MonoClassMethod, NULL, NULL, NULL);
+        
+    return 0;
+}
+
+void __attribute__((destructor)) shutdown()
+{
+
+};
+
+</code></pre></div></div>
+
+<p>The above stager payload loads the mono assembly located in <code class="language-plaintext highlighter-rouge">&lt;root&gt;/Robocraft_Data/Managed/Client.dll</code> into memory and executes the class method Load within the namespace Test and class Test (Test::Test::Load).</p>
+
+<p>Load has the following signature: <code class="language-plaintext highlighter-rouge">public  static  void  Load()</code>
+The stager may be compiled with: <code class="language-plaintext highlighter-rouge">gcc -fpic -shared stager.cpp -o stager.so</code></p>
+
+<p>In order to inject the stager into the target process you may use any standard linux shared library <a href="https://git.lunar.sh/spacehen/RobocraftClient/src/branch/master/injector">injector</a>.</p>
+
+<p>With the capability of loading our own mono code into the target process, we need to ensure that our injected c# code stays persistent, i.e to prevent de-allocation due to garbage collection.</p>
+
+<p>For Unity3D this is typically achieved using the following pattern:</p>
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>     public class Exploit : MonoBehaviour
+	{...}
+	
+ public static class Test
+    {
+        private static GameObject loader;
+        public static void Load()
+        {
+            loader = new GameObject();
+            loader.AddComponent&lt;Exploit&gt;();
+            UnityEngine.Object.DontDestroyOnLoad(loader);
+        }
+    }
+
+</code></pre></div></div>
+<p>It is also worth keeping track of the mono/.NET assembly versions used in the original application. Ideally you would want to use an identical .NET version as compiling your c# exploit with the wrong .NET version can cause your exploit to fail.</p>
+
+<p>For Robocraft .NET v2.0 was required. Finding support for an older version of .NET can be difficult as most modern C# IDE’s do not support such an old target. A simple solution to this problem is to download an older version of mono.</p>
+
+<p>At this point the second stage payload (our c# exploit) can be developed. I chose to implement three simple functionalities:</p>
+
+<ul>
+  <li>Increase/decrease game speed</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if(Input.GetKeyDown(KeyCode.F2)){
+            speedhack =  !speedhack;
+            if(speedhack == true){
+                Time.timeScale = 3;
+            }else{
+                Time.timeScale = 1;
+            }
+        }
+</code></pre></div></div>
+<ul>
+  <li>Clip through walls/obstacles</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if(Input.GetKeyDown(KeyCode.F3)){
+            collision =  !collision;
+            GameObject obj = GameObject.Find("Player Machine Root");
+            Rigidbody rb = obj.GetComponent&lt;Rigidbody&gt;();
+            if(collision == true){
+                rb.detectCollisions = false;
+            }else{
+                rb.detectCollisions = true;
+            }
+        }
+
+</code></pre></div></div>
+<p><img src="https://journal.lunar.sh/images/4/05.png" alt="enter image description here" /></p>
+
+<p><img src="https://journal.lunar.sh/images/4/06.png" alt="enter image description here" /></p>
+
+<ul>
+  <li>Place all network entites near player</li>
+</ul>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>if(Input.GetKeyDown(KeyCode.F1))
+{
+    salt = !salt;
+    GameObject obj = GameObject.Find("Player Machine Root");
+    position = obj.transform.position;
+
+    foreach(GameObject gameObj in GameObject.FindObjectsOfType&lt;GameObject&gt;())
+    {
+        if(gameObj.name == "centerGameObject")
+        {
+            GameObject parent = gameObj.transform.parent.gameObject;
+            if(parent.name != "Player Machine Root"){
+                MonoBehaviour[] comp = parent.GetComponents&lt;MonoBehaviour&gt;();
+                foreach (MonoBehaviour c in comp){
+                    c.enabled = !salt;
+                    
+                }
+                Vector3 myposition = position;
+                parent.transform.position = myposition;
+
+            }
+
+        }
+    }
+}   
+</code></pre></div></div>
+<p><img src="https://journal.lunar.sh/images/4/07.png" alt="enter image description here" /></p>
+
+<p>In order to find the names of the game objects for the main player as well as network players you can simply iterate through all the global game objects and dump the corresponding names to a text file.</p>
+
+<p><a name="source"></a></p>
+<h3 id="source-code">Source Code</h3>
+
+<p>All source code for this journal is hosted at <a href="https://git.lunar.sh/spacehen/RobocraftClient/">https://git.lunar.sh/spacehen/RobocraftClient/</a></p>
+:ET
