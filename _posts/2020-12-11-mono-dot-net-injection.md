@@ -206,9 +206,9 @@ if(Input.GetKeyDown(KeyCode.F3)){
         }
 
 ``` 
-![enter image description here](https://journal.lunar.sh/images/4/05.png)
+![enter image description here](https://spacehen.github.io/images/4/05.png)
 
-![enter image description here](https://journal.lunar.sh/images/4/06.png)
+![enter image description here](https://spacehen.github.io/images/4/06.png)
  
 - Place all network entites near player
 
@@ -239,7 +239,7 @@ if(Input.GetKeyDown(KeyCode.F1))
     }
 }   
 ```
-![enter image description here](https://journal.lunar.sh/images/4/07.png)
+![enter image description here](https://spacehen.github.io/images/4/07.png)
 
 In order to find the names of the game objects for the main player as well as network players you can simply iterate through all the global game objects and dump the corresponding names to a text file.
 
